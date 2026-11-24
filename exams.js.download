@@ -1,0 +1,214 @@
+// JNTUH & Autonomous Exam Vault Handler
+
+let examData = null;
+let currentSubject = null;
+let currentYearFilter = "all";
+let currentSearchTerm = "";
+
+async function loadExamVault() {
+  const container = document.getElementById("exam-subject-list");
+  if (!container) return;
+
+  try {
+    const res = await fetch("/api/exams/jntuh");
+    examData = await res.json();
+    renderScoringStrategy(examData.marking_strategy);
+    filterAndRenderSubjects();
+    if (examData.subjects.length > 0) {
+      selectSubject(examData.subjects[0].id);
+    }
+  } catch (err) {
+    console.error("Failed to load exam data:", err);
+  }
+}
+
+function renderScoringStrategy(strat) {
+  const container = document.getElementById("exam-strategy-tips");
+  if (!container) return;
+
+  const tipsHtml = strat.tips.map(tip => `
+    <li class="text-xs text-slate-700 leading-relaxed flex items-start gap-2">
+      <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"></i>
+      <span>${tip}</span>
+    </li>
+  `).join("");
+
+  container.innerHTML = `
+    <div class="p-5 rounded-2xl bg-amber-50/70 border border-amber-200">
+      <div class="flex items-center gap-2 text-amber-800 text-xs font-bold uppercase mb-2">
+        <i data-lucide="award" class="w-4 h-4 text-amber-600"></i>
+        ${strat.title}
+      </div>
+      <ul class="space-y-2 mt-2">
+        ${tipsHtml}
+      </ul>
+    </div>
+  `;
+}
+
+function setExamYearFilter(year) {
+  currentYearFilter = year;
+  
+  // Update button active styling
+  const buttons = document.querySelectorAll("#exam-year-filters button");
+  buttons.forEach(btn => {
+    if (btn.getAttribute("data-year") === year) {
+      btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white shadow-2xs";
+    } else {
+      btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors";
+    }
+  });
+
+  filterAndRenderSubjects();
+}
+
+function handleExamSearch(term) {
+  currentSearchTerm = term.toLowerCase().trim();
+  filterAndRenderSubjects();
+}
+
+function filterAndRenderSubjects() {
+  if (!examData) return;
+
+  let filtered = examData.subjects;
+
+  // Filter by year
+  if (currentYearFilter !== "all") {
+    if (currentYearFilter === "ece") {
+      filtered = filtered.filter(s => s.branch.includes("ECE") || s.id === "edc" || s.id === "dld");
+    } else {
+      filtered = filtered.filter(s => s.year.toLowerCase().includes(currentYearFilter.toLowerCase()));
+    }
+  }
+
+  // Filter by search
+  if (currentSearchTerm) {
+    filtered = filtered.filter(s => 
+      s.name.toLowerCase().includes(currentSearchTerm) || 
+      s.code.toLowerCase().includes(currentSearchTerm) ||
+      s.branch.toLowerCase().includes(currentSearchTerm)
+    );
+  }
+
+  renderSubjectPills(filtered);
+}
+
+function renderSubjectPills(subjects) {
+  const container = document.getElementById("exam-subject-list");
+  if (!container) return;
+
+  if (subjects.length === 0) {
+    container.innerHTML = `<div class="p-4 text-slate-500 text-xs italic">No subjects found matching your filter.</div>`;
+    return;
+  }
+
+  const pillsHtml = subjects.map(sub => `
+    <button onclick="selectSubject('${sub.id}')" id="sub-pill-${sub.id}" class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-slate-200 bg-white text-slate-700 hover:border-amber-400 flex items-center gap-1.5 text-left">
+      <span>${sub.name}</span>
+      <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-normal">${sub.year}</span>
+    </button>
+  `).join("");
+
+  container.innerHTML = pillsHtml;
+
+  // Re-select current or first
+  if (currentSubject && subjects.some(s => s.id === currentSubject.id)) {
+    highlightSelectedPill(currentSubject.id);
+  } else if (subjects.length > 0) {
+    selectSubject(subjects[0].id);
+  }
+}
+
+function highlightSelectedPill(subId) {
+  const buttons = document.querySelectorAll("#exam-subject-list button");
+  buttons.forEach(btn => {
+    if (btn.id === `sub-pill-${subId}`) {
+      btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-amber-600 bg-amber-600 text-white shadow-2xs flex items-center gap-1.5 text-left";
+    } else {
+      btn.className = "px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-slate-200 bg-white text-slate-700 hover:border-amber-400 flex items-center gap-1.5 text-left";
+    }
+  });
+}
+
+function selectSubject(subId) {
+  if (!examData) return;
+  currentSubject = examData.subjects.find(s => s.id === subId);
+  if (!currentSubject) return;
+
+  highlightSelectedPill(subId);
+  renderSubjectQuestions(currentSubject);
+}
+
+function renderSubjectQuestions(subject) {
+  const container = document.getElementById("exam-questions-content");
+  if (!container) return;
+
+  const unitsHtml = subject.high_priority_questions.map((unitGroup, uIdx) => {
+    const qListHtml = unitGroup.questions.map((q, qIdx) => `
+      <div class="p-3 bg-white rounded-xl border border-slate-200 flex items-start justify-between gap-3 group hover:border-amber-300 transition-colors">
+        <div class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+            ${qIdx + 1}
+          </span>
+          <p class="text-xs text-slate-800 leading-relaxed font-medium">${q}</p>
+        </div>
+        <button onclick="copyQuestionText(this, '${escape(q)}')" class="shrink-0 text-slate-400 hover:text-amber-600 p-1 rounded-md transition-colors" title="Copy Question">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    `).join("");
+
+    return `
+      <div class="space-y-2.5">
+        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <i data-lucide="bookmark" class="w-3.5 h-3.5 text-amber-600"></i>
+          ${unitGroup.unit}
+        </h4>
+        <div class="space-y-2">
+          ${qListHtml}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="space-y-6 msg-animate">
+      <div class="p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] font-bold uppercase tracking-wider bg-white px-2 py-0.5 rounded-full border border-amber-300 text-amber-800 font-mono">Code: ${subject.code}</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">${subject.branch}</span>
+          </div>
+          <h3 class="text-xl font-extrabold text-slate-900 mt-2">${subject.name}</h3>
+          <p class="text-xs text-slate-600 mt-0.5 font-medium">${subject.year} • R22 / Autonomous Syllabus</p>
+        </div>
+        <div class="text-xs space-y-1.5 shrink-0">
+          <div class="p-2 bg-white/90 rounded-lg border border-amber-200 text-[11px] text-slate-700">
+            <strong class="text-amber-800">Mid-1 Syllabus:</strong> ${subject.mid1_units}
+          </div>
+          <div class="p-2 bg-white/90 rounded-lg border border-orange-200 text-[11px] text-slate-700">
+            <strong class="text-orange-800">Mid-2 Syllabus:</strong> ${subject.mid2_units}
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        ${unitsHtml}
+      </div>
+    </div>
+  `;
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function copyQuestionText(btn, escapedText) {
+  const text = unescape(escapedText);
+  navigator.clipboard.writeText(text).then(() => {
+    btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>`;
+    if (window.lucide) lucide.createIcons();
+    setTimeout(() => {
+      btn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i>`;
+      if (window.lucide) lucide.createIcons();
+    }, 1500);
+  });
+}

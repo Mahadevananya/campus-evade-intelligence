@@ -1,0 +1,129 @@
+// Core application logic & view switching
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+  // Load initial data
+  loadPlaybook();
+  loadCertifications();
+  loadExamVault();
+});
+
+function switchTab(tabId) {
+  const tabs = ["dashboard", "profiler", "playbook", "exams", "certifications", "coach", "wellness", "projects"];
+  
+  tabs.forEach(tab => {
+    const view = document.getElementById(`view-${tab}`);
+    const navBtn = document.getElementById(`tab-${tab}`);
+    
+    if (view) {
+      if (tab === tabId) {
+        view.classList.remove("hidden");
+      } else {
+        view.classList.add("hidden");
+      }
+    }
+
+    if (navBtn) {
+      if (tab === tabId) {
+        navBtn.className = "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-semibold transition-colors text-indigo-700 bg-indigo-50/90";
+      } else {
+        navBtn.className = "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors text-slate-600 hover:bg-slate-100";
+      }
+    }
+  });
+
+  // Re-run icons for newly revealed views
+  if (window.lucide) {
+    setTimeout(() => lucide.createIcons(), 50);
+  }
+}
+
+// Bunk Calculator Logic
+function calculateBunk() {
+  const attended = parseInt(document.getElementById("calc-attended").value) || 0;
+  const total = parseInt(document.getElementById("calc-total").value) || 0;
+  const resDiv = document.getElementById("calc-result");
+
+  if (total <= 0 || attended < 0 || attended > total) {
+    resDiv.innerHTML = `<span class="text-rose-600 font-bold">Please enter valid class counts!</span>`;
+    return;
+  }
+
+  const currentPercent = ((attended / total) * 100).toFixed(1);
+  const maxSafeBunks = Math.floor((attended / 0.75) - total);
+
+  if (maxSafeBunks > 0) {
+    resDiv.innerHTML = `Current Attendance: <strong class="text-indigo-600">${currentPercent}%</strong> • You can safely miss <strong class="text-emerald-600">${maxSafeBunks}</strong> more classes!`;
+  } else if (maxSafeBunks === 0) {
+    resDiv.innerHTML = `Current Attendance: <strong class="text-amber-600">${currentPercent}%</strong> • Exactly on edge! Do not miss any classes.`;
+  } else {
+    const needed = Math.ceil(3 * total - 4 * attended);
+    resDiv.innerHTML = `Current Attendance: <strong class="text-rose-600">${currentPercent}%</strong> • Below 75%! You must attend <strong class="text-rose-700">${needed}</strong> consecutive classes.`;
+  }
+}
+
+// Project Blueprint Generator
+async function generateProjectBlueprint() {
+  const domain = document.getElementById("proj-domain").value;
+  const difficulty = document.getElementById("proj-diff").value;
+  const resultDiv = document.getElementById("project-blueprint-result");
+
+  resultDiv.classList.remove("hidden");
+  resultDiv.innerHTML = `
+    <div class="p-8 text-center text-slate-500 flex flex-col items-center">
+      <div class="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+      <p class="text-xs font-semibold">Architecting standout project blueprint...</p>
+    </div>
+  `;
+
+  try {
+    const res = await fetch("/api/projects/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain, difficulty })
+    });
+    const data = await res.json();
+    const bp = data.blueprint;
+
+    let stackHtml = Object.entries(bp.tech_stack).map(([k, v]) => `
+      <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+        <span class="font-bold text-slate-700">${k}:</span> <span class="text-indigo-700 font-mono">${v}</span>
+      </div>
+    `).join("");
+
+    let featuresHtml = bp.key_features.map(f => `<li class="text-xs text-slate-600 mb-1.5 flex items-start gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500 shrink-0 mt-0.5"></i> <span>${f}</span></li>`).join("");
+    let resumeBulletsHtml = bp.resume_impact_bullets.map(b => `<li class="text-xs text-slate-700 mb-2 font-mono bg-slate-50 p-2.5 rounded-lg border border-slate-200">${b}</li>`).join("");
+
+    resultDiv.innerHTML = `
+      <div class="p-6 rounded-2xl bg-gradient-to-br from-purple-50/60 to-indigo-50/60 border border-purple-200/80 space-y-5">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full">Resume-Ready Blueprint</span>
+          <h3 class="text-xl font-extrabold text-slate-900 mt-2">${bp.title}</h3>
+          <p class="text-xs text-slate-600 mt-1 leading-relaxed">${bp.tagline}</p>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Recommended Tech Stack</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${stackHtml}</div>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Standout Architectural Features</h4>
+          <ul class="space-y-1">${featuresHtml}</ul>
+        </div>
+
+        <div>
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Ready-To-Use Resume Bullet Points (ATS Optimized)</h4>
+          <ul class="space-y-2">${resumeBulletsHtml}</ul>
+        </div>
+      </div>
+    `;
+
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  } catch (err) {
+    resultDiv.innerHTML = `<div class="p-4 bg-rose-50 text-rose-700 text-xs rounded-xl">Error generating project blueprint. Please check connection.</div>`;
+  }
+}

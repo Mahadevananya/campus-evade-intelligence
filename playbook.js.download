@@ -1,0 +1,89 @@
+// 4-Year Engineering Playbook Loader & Renderer
+
+let playbookData = null;
+
+async function loadPlaybook() {
+  try {
+    const res = await fetch("/api/playbook");
+    playbookData = await res.json();
+    renderPlaybookYear(0); // Default to 1st year
+  } catch (err) {
+    console.error("Failed to load playbook data:", err);
+  }
+}
+
+function renderPlaybookYear(yearIdx) {
+  if (!playbookData || !playbookData.years[yearIdx]) return;
+
+  // Update tabs visual state
+  for (let i = 0; i < 4; i++) {
+    const tabBtn = document.getElementById(`pb-tab-i`);
+    const btn = document.getElementById(`pb-tab-${i}`);
+    if (btn) {
+      if (i === yearIdx) {
+        btn.className = "px-4 py-2 text-xs font-bold rounded-lg bg-indigo-600 text-white shadow-xs";
+      } else {
+        btn.className = "px-4 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors";
+      }
+    }
+  }
+
+  const yearInfo = playbookData.years[yearIdx];
+  const container = document.getElementById("playbook-content");
+
+  const milestonesHtml = yearInfo.milestones.map((m, idx) => `
+    <div class="flex items-start gap-3 p-3.5 bg-white rounded-xl border border-slate-200">
+      <div class="w-6 h-6 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 border border-indigo-100">
+        ${idx + 1}
+      </div>
+      <p class="text-xs text-slate-700 leading-relaxed font-medium">${m}</p>
+    </div>
+  `).join("");
+
+  const resourcesHtml = yearInfo.free_resources.map(r => `
+    <a href="${r.url}" target="_blank" rel="noopener noreferrer" class="block p-4 rounded-xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-200 transition-all group">
+      <div class="flex items-center justify-between">
+        <h5 class="text-xs font-bold text-slate-800 group-hover:text-indigo-700 flex items-center gap-1.5">
+          <span>${r.title}</span>
+          <i data-lucide="external-link" class="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+        </h5>
+        <span class="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Free</span>
+      </div>
+      <p class="text-[11px] text-slate-500 mt-1">Creator / Platform: ${r.author}</p>
+    </a>
+  `).join("");
+
+  container.innerHTML = `
+    <div class="space-y-6 msg-animate">
+      <div class="p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-white px-2.5 py-0.5 rounded-full border border-blue-200">Year Guide</span>
+        <h3 class="text-lg font-extrabold text-slate-900 mt-2">${yearInfo.year} — ${yearInfo.theme}</h3>
+        <p class="text-xs text-slate-600 mt-1 font-medium">🎯 Primary Goal: ${yearInfo.goal}</p>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <i data-lucide="check-square" class="w-4 h-4 text-indigo-600"></i>
+          Key Milestones & Must-Do Actions
+        </h4>
+        <div class="space-y-2.5">
+          ${milestonesHtml}
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <i data-lucide="book-marked" class="w-4 h-4 text-emerald-600"></i>
+          Curated Free Resources & Courses (No Paid Courses Needed)
+        </h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          ${resourcesHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
